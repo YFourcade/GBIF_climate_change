@@ -10,15 +10,13 @@ library(rnaturalearth)
 library(viridis)
 sf::sf_use_s2(FALSE)
 
-setwd("C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle")
-
 # load data directories
-dir.df.buff <- list.files("./Results/", full.names = T, pattern = "Descr_per_buffer_")
-dir.df.yr <- list.files("./Results/", full.names = T, pattern = "Descr_per_year_")
-temp_windows <- read_csv("./Results/temp_windows.csv")
+dir.df.buff <- list.files("../../../../Results/", full.names = T, pattern = "Descr_per_buffer_")
+dir.df.yr <- list.files("../../../../Results/", full.names = T, pattern = "Descr_per_year_")
+temp_windows <- read_csv("../../../../Results/temp_windows.csv")
 
 # find taxon names
-name.group <- gsub("./Results/Descr_per_year_", "", dir.df.yr)
+name.group <- gsub("../../../../Results/Descr_per_year_", "", dir.df.yr)
 name.group <- gsub(".csv", "", name.group)
 print(name.group)
 
@@ -154,11 +152,11 @@ ggplot() +
 
 
 # data sources
-dir.datasets <- list.files("./Data/datasets/", full.names = T)[-7]
+dir.datasets <- list.files("../../../../Data/datasets/", full.names = T)[-7]
 
 data_source <- NULL
 for(i in 1:length(dir.datasets)){
-  name.group <- gsub("./Data/datasets/", "", dir.datasets)
+  name.group <- gsub("../../../../Data/datasets/", "", dir.datasets)
   name.group <- gsub(".csv", "", name.group)
   name.group <- gsub(".sqlite", "", name.group)
   print(name.group[i])
@@ -181,9 +179,9 @@ for(i in 1:length(dir.datasets)){
   data_source <- rbind.data.frame(data_source, df.sum)
 }
 
-write_csv(data_source, "./Results/data_sources.csv")
+write_csv(data_source, "../../../../Results/data_sources.csv")
 
-# data_source <- read_csv("./Results/data_sources.csv")
+# data_source <- read_csv("../../../../Results/data_sources.csv")
 
 data_source <- data_source %>% 
   mutate(
@@ -233,3 +231,23 @@ p3 <- data_source %>% filter(rang < 11) %>%
 
 cowplot::plot_grid(p1,p2,p3, nrow = 3, labels = c("(a)","(b)","(c)"))
 ggsave("Fig2.pdf", width = 4.5, height = 10)
+
+
+
+### extract number of species for each taxon ###
+dir.df <- list.files("../../../../Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
+
+sp <- c()
+for(j in 1:length(dir.df)) {
+  name.group <- gsub("../../../../Data/datasets/cleaned/thinned/", "", dir.df[[j]])
+  name.group <- gsub("../../../.", "", name.group)
+  name.group <- gsub(".csv", "", name.group)
+  print(name.group)
+  
+  df <- fread(dir.df[[j]])
+  sp.unique <- unique(df$species)
+  
+  sp <- rbind.data.frame(sp, cbind.data.frame(Taxon = name.group, sp.unique))
+}
+
+sp %>% group_by(Taxon) %>% summarise(n = n())

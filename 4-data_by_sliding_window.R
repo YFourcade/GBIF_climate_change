@@ -10,26 +10,26 @@ library(data.table)
 library(rnaturalearth)
 sf::sf_use_s2(FALSE)
 
-setwd("C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle")
-
 ### Data ###
 # load data sets
-dir.df <- list.files("./Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
+dir.df <- list.files("../../../../Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
 # load STI
-dir.sti <- list.files("./Data/STI/", full.names = T, pattern = ".csv")
+dir.sti <- list.files("../../../../Data/STI/", full.names = T, pattern = ".csv")
+# ecoregions
+eco <- st_read("C:/Users/200597/OneDrive - UPEC/Recherche/Mammals' macrocecology/Global Community structure/Data/wwf ecoregions/wwf_terr_ecos.shp")
 
 # Human influence index
 
-# hii <- rast("./Data/hii_v2geo/hdr.adf")
-# gdalUtils::gdalwarp(srcfile = "./Data/hii_v2geo/hdr.adf", 
-#          dstfile = "./Data/hii_v2geo/hii_proj.tiff",
+# hii <- rast("../../../../Data/hii_v2geo/hdr.adf")
+# gdalUtils::gdalwarp(srcfile = "../../../../Data/hii_v2geo/hdr.adf", 
+#          dstfile = "../../../../Data/hii_v2geo/hii_proj.tiff",
 #          t_srs = crs("ESRI:54009"),
 #          overwrite = T)
 
-hii <- rast("./Data/hii_v2geo/hii_proj.tiff")
+hii <- rast("../../../../Data/hii_v2geo/hii_proj.tiff")
 
 # load temperature
-tmp <- rast("C:/Users/200597/Desktop/cru_ts4.04.1901.2019.tmp.dat.nc")
+tmp <- rast("cru_ts4.04.1901.2019.tmp.dat.nc")
 tmp9019 <-subset(tmp, 1068:1428)
 yrs <- unique(year(time(tmp9019)))[-1]
 
@@ -56,17 +56,17 @@ tmp9019_winter_mean_5years <- tapp(tmp9019_winter_mean, rep(1:6,each=5), fun = m
 names(tmp9019_winter_mean_5years) <- c(1992,1997,2002,2007,2012,2017)
 
 ### Sliding windows ###
-# création d'un raster de résolution 1*1
+# create raster at resolution 1*1
 r2 <-rast(nrows=180, ncols=360, xmin=-180, xmax=180, ymin=-90, ymax=90,
           crs = "epsg:4326", resolution = 1)
 
-# Conversion du raster en polygone
+# Convert raster to polygons
 pol2 <- as.polygons(r2)
 pol2 <- st_as_sf(pol2)
 pol2$id_polygons <- 1:nrow(pol2)
 pol2$id_polygons <- paste0("ID_", 1:nrow(pol2))
 
-# centroïdes
+# centroids
 cent2 <- st_centroid(pol2)
 cent2$id_polygons <- pol2$id_polygons
 
@@ -87,7 +87,7 @@ cent_unproj <- na.omit(cent_unproj)
 # projection
 cent_proj <- st_transform(cent2[cent2$id_polygons %in% cent_unproj$id_polygons,], "ESRI:54009")
 
-# création de buffers autour de chaque centroïde
+# create buffers around each centroïd
 Buffer <- st_buffer(cent_proj, dist = 200000) %>% 
   mutate(X = st_coordinates(cent_proj)[,1], Y = st_coordinates(cent_proj)[,2]) 
 
@@ -151,18 +151,18 @@ tmp_trend <- bind_rows(
 
 tmp_trend <- tmp_trend %>% left_join(cent_unproj)
 
-write_csv(tmp_trend, "./Results/temp_windows.csv")
+write_csv(tmp_trend, "../../../../Results/temp_windows.csv")
 
 ### HII ###
 hii.buf <- exact_extract(hii, Buffer, fun = "mean")
 hii.buf <- cbind.data.frame(id_polygons = cent_proj$id_polygons, hii = hii.buf)
 
-write_csv(hii.buf, "./Results/hii_windows.csv")
+write_csv(hii.buf, "../../../../Results/hii_windows.csv")
 
 
 ### CTI ###
 for(i in 1:length(dir.df)){
-  name.group <- gsub("./Data/datasets/cleaned/thinned/", "", dir.df[[i]])
+  name.group <- gsub("../../../../Data/datasets/cleaned/thinned/", "", dir.df[[i]])
   name.group <- gsub(".csv", "", name.group)
   print(name.group)
   
@@ -197,7 +197,7 @@ for(i in 1:length(dir.df)){
     dplyr::group_by(id_polygons, year) %>%
     dplyr::summarise(n.sp.yr = length(unique(species)), n.occ = n()) 
   
-  write_csv(Buffer_yr_occ_sp, paste0("./Results/Descr_per_buffer_", name.group ,".csv"))
+  write_csv(Buffer_yr_occ_sp, paste0("../../../../Results/Descr_per_buffer_", name.group ,".csv"))
   
   # nb species/window/occurrences per year
   yr_occ_sp <- df.Buffer %>% 
@@ -206,7 +206,7 @@ for(i in 1:length(dir.df)){
                      n.window = length(unique(id_polygons)),
                      n.occ = n())
   
-  write_csv(yr_occ_sp, paste0("./Results/Descr_per_year_", name.group ,".csv"))
+  write_csv(yr_occ_sp, paste0("../../../../Results/Descr_per_year_", name.group ,".csv"))
   
   # associer les STI
   sti <- fread(dir.sti[[i]])
@@ -230,7 +230,7 @@ for(i in 1:length(dir.df)){
   CTI_anu <- CTI_anu %>%
     filter(!n.sp == 1) %>% na.omit()
   
-  write_csv(CTI_anu, paste0("./Results/CTI_annual_", name.group ,".csv"))
+  write_csv(CTI_anu, paste0("../../../../Results/CTI_annual_", name.group ,".csv"))
   
   # CTI trend
   CTI_trend <- CTI_anu %>% 
@@ -242,5 +242,59 @@ for(i in 1:length(dir.df)){
         summarise(mean = mean(cti))
     )
   
-  write_csv(CTI_trend, paste0("./Results/CTI_trend_", name.group ,".csv"))
+  write_csv(CTI_trend, paste0("../../../../Results/CTI_trend_", name.group ,".csv"))
 }
+
+### extract ecoregions ###
+eco <- st_transform(eco, "ESRI:54009")
+intersect.tmp <- st_intersects(Buffer, eco)
+intersect.tmp <- as.data.frame(intersect.tmp)
+eco.sf.dt <- eco %>% st_drop_geometry %>% as.data.table()
+Buffer.dt <- Buffer %>% st_drop_geometry %>% as.data.table()
+
+df.Buffer <- cbind(
+  Buffer.dt[intersect.tmp$row.id,1:3],
+  eco.sf.dt[intersect.tmp$col.id,4:6]
+) %>% 
+  group_by(id_polygons) %>% 
+  summarize(ECO_NAME=names(which.max(table(ECO_NAME))))
+
+write_csv(df.Buffer, "../../../../Results/ecoregions.csv")
+
+
+### summarise sliding windows ###
+res.df <- list.files("../../../../Results/", pattern = "CTI_annual", full.names = T)
+
+# count number of sliding windows in total
+polys <- unlist(
+  lapply(res.df, 
+       function(x){
+         tmp <- read_csv(x)
+         unique(tmp$id_polygons)
+       })
+) %>% unique 
+
+length(polys)
+
+
+# count number of species within sliding windows
+n.sp <- rbindlist(
+  lapply(res.df,
+         function(x){
+           tmp <- read_csv(x)
+         })
+) %>% pull(n.sp)
+
+summary(n.sp)
+
+# count number of occurrences within sliding windows
+n.occ <- rbindlist(
+  lapply(list.files("../../../../Results/", pattern = "Descr_per_buffer",full.names = T),
+         function(x){
+           tmp <- read_csv(x)
+         })
+) %>% pull(n.occ)
+
+summary(n.occ)
+
+

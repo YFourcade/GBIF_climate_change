@@ -10,25 +10,23 @@ library(terra)
 library(rnaturalearth)
 library(doFuture)
 
-setwd("C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle")
-
 # load data sets
-dir.df <- list.files("./Data/datasets/cleaned", full.names = T, pattern = ".csv")
+dir.df <- list.files("../../../../Data/datasets/cleaned", full.names = T, pattern = ".csv")
 
-# sous-échantillonnage + sélectionner occurrences en AmN et Europe
+# subsampling + select occurrences in AmN and Europe
 world <- st_as_sf(countries110) %>% st_buffer(., 1)
 world <- world %>% group_by(continent) %>% summarise()
 world <- world %>% filter(continent %in% c("Europe", "North America"))
 
-dir.create("./Data/datasets/cleaned/thinned") 
+dir.create("../../../../Data/datasets/cleaned/thinned") 
 
 registerDoFuture()
 plan(multisession, workers = 5)
 options(future.globals.maxSize = +Inf)
 
-for(j in c(3,7)){
+for(j in c(1:10)){
   
-  name.group <- gsub("./Data/datasets/cleaned/", "", dir.df[[j]])
+  name.group <- gsub("../../../../Data/datasets/cleaned/", "", dir.df[[j]])
   name.group <- gsub(".csv", "", name.group)
   print(name.group)
   
@@ -67,7 +65,7 @@ for(j in c(3,7)){
                                     "2017" = "2018",
                                     "2017" = "2019")
 
-  # créer un raster avec l'étendue des points et une resolution de 5 km
+  # create a raster with the same extent as occurrences and a resolution of 5 km
   r <- rast((ext(world)+1)*1.2)
   res(r) <- 0.04
   crs(r) <- "epsg:4326"
@@ -88,12 +86,12 @@ for(j in c(3,7)){
   pts_thin_sp <- pts_thin_sp[,c(1,2,5,6)]
   names(pts_thin_sp)[2:4] <- c("year", "X","Y")
   
-  # garder les occurrences d'AMnord et Europe
+  # keep occurrences from AMnord and Europe
   pts_thin_sp_sf <- st_as_sf(pts_thin_sp, coords = c("X", "Y"), crs = 4326)
   
   pts_thin_sp <- pts_thin_sp[extract(vect(world["continent"]), vect(pts_thin_sp_sf))[,2] %in% 
                                c("Europe", "North America"),]
   
-  fwrite(pts_thin_sp, paste0("./Data/datasets/cleaned/thinned/", name.group, ".csv"))
+  fwrite(pts_thin_sp, paste0("../../../../Data/datasets/cleaned/thinned/", name.group, ".csv"))
   
 }

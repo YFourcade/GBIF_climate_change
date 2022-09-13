@@ -1,3 +1,10 @@
+#-----------------------------------------------------------------------#
+# 0. This is a specific script for handling birds' occurrence, 
+# because the dataset if too big to be cleaned / processed in the same
+# way as the other taxa
+#-----------------------------------------------------------------------#
+
+
 library(inborutils)
 library(tidyverse)
 library(sf)
@@ -8,21 +15,14 @@ library(doFuture)
 library(data.table)
 library(CoordinateCleaner)
 
-registerDoFuture()
-plan(multisession, workers = 10)
-options(future.globals.maxSize = +Inf)
+#---------------------------------#
+# Convert bird data into database
+#---------------------------------#
 
-setwd("C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle")
-
-#-----------------------------#
-# 0. Convert bird data into
-# database because too big :)
-#-----------------------------#
-
-sqlite_file1 <- "./Data/datasets/Aves_summer.sqlite"
+sqlite_file1 <- "../../../../Data/datasets/Aves_summer.sqlite"
 table_name1 <- "birds_summer"
 
-csv_to_sqlite(csv_file = "C:/Users/200597/Desktop/0357713-210914110416597.csv", 
+csv_to_sqlite(csv_file = "0357713-210914110416597.csv", 
               sqlite_file1, table_name1, pre_process_size = 1000, 
               delim = "\t",
               chunk_size = 50000, show_progress_bar = FALSE)
@@ -30,13 +30,13 @@ csv_to_sqlite(csv_file = "C:/Users/200597/Desktop/0357713-210914110416597.csv",
 sqlite_file2 <- "./Data/datasets/Aves_winter.sqlite"
 table_name2 <- "birds_winter"
 
-csv_to_sqlite(csv_file = "C:/Users/200597/Desktop/0357715-210914110416597.csv", 
+csv_to_sqlite(csv_file = "0357715-210914110416597.csv", 
               sqlite_file2, table_name2, pre_process_size = 1000, 
               delim = "\t",
               chunk_size = 50000, show_progress_bar = FALSE)
 
 #-----------------------------#
-# 1-2. Clean bird coordinates
+# Clean bird coordinates
 # and spatial thinning
 #-----------------------------#
 world <- st_as_sf(countries110) %>% st_buffer(., 1)
@@ -63,18 +63,20 @@ dir.create(dir)
 sp.done <- list.files(dir); sp.done <- gsub(".csv", "", sp.done)
 sp.done.index <- match(sp.done, sp)
 
-db.path <- "C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle/Data/datasets/Aves_summer.sqlite"
+db.path <- "../../../../Data/datasets/Aves_summer.sqlite"
 
 # loop for 
+registerDoFuture()
+plan(multisession, workers = 10)
+options(future.globals.maxSize = +Inf)
+
 foreach(k = setdiff(1:length(sp), sp.done.index)) %dopar% {
   # select species
   sp.to.select <- sp[[k]]
   
   data <- DBI::dbConnect(RSQLite::SQLite(), db.path)
-  # dbplyr::src_dbi(data)
   df.temp <- tbl(data, "birds_summer", sep = "\t") %>% filter(species == sp.to.select)
-  # RSQLite::dbClearResult(RSQLite::dbSendQuery(data, "PRAGMA busy_timeout=5000;"));
-  
+
   col.long <- "decimalLongitude"
   col.lat <- "decimalLatitude"
   
@@ -188,11 +190,11 @@ foreach(k = setdiff(1:length(sp), sp.done.index)) %dopar% {
 
 birds_summer_ls <- lapply(list.files(dir, full.names = T), fread)
 birds_summer_ls <- rbindlist(birds_summer_ls)
-fwrite(birds_summer_ls, "./Data/datasets/cleaned/thinned/birds_summer.csv")
+fwrite(birds_summer_ls, "../../../../Data/datasets/cleaned/thinned/birds_summer.csv")
 
 ## winter communities ##
 # load database
-data <- DBI::dbConnect(RSQLite::SQLite(), "./Data/datasets/Aves_winter.sqlite")
+data <- DBI::dbConnect(RSQLite::SQLite(), "../../../../Data/datasets/Aves_winter.sqlite")
 dbplyr::src_dbi(data)
 df <- tbl(data, "birds_winter", sep = "\t")
 
@@ -203,13 +205,13 @@ sp <- read_csv("sp_birds.winter.csv") %>% pull(species)
 sp <- gsub("/", "-", sp)
 
 # find remaining species
-dir <- "./Data/datasets/cleaned/thinned/birds_winter/"
+dir <- "../../../../Data/datasets/cleaned/thinned/birds_winter/"
 dir.create(dir)
 
 sp.done <- list.files(dir); sp.done <- gsub(".csv", "", sp.done)
 sp.done.index <- match(sp.done, sp)
 
-db.path <- "C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle/Data/datasets/Aves_winter.sqlite"
+db.path <- "../../../../Data/datasets/Aves_winter.sqlite"
 
 # loop
 foreach(k = setdiff(1:length(sp), sp.done.index)) %dopar% {
@@ -339,5 +341,5 @@ foreach(k = setdiff(1:length(sp), sp.done.index)) %dopar% {
 
 birds_winter_ls <- lapply(list.files(dir, full.names = T), fread)
 birds_winter_ls <- rbindlist(birds_winter_ls)
-fwrite(birds_winter_ls, "./Data/datasets/cleaned/thinned/birds_winter.csv")
+fwrite(birds_winter_ls, "../../../../Data/datasets/cleaned/thinned/birds_winter.csv")
 

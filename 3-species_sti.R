@@ -6,17 +6,14 @@ library(tidyverse)
 library(terra)
 library(data.table)
 
-setwd("C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle")
-
-## Charger données ##
+## leod data ##
 # load data sets
-dir.df <- list.files("./Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
+dir.df <- list.files("../../../../Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
 
-# climate data CRU.TS4.04 (une couche par mois)
-tmp <- rast("C:/Users/200597/Desktop/cru_ts4.04.1901.2019.tmp.dat.nc")
+# climate data CRU.TS4.04
+tmp <- rast("cru_ts4.04.1901.2019.tmp.dat.nc")
 
-# Couches de températures moyennes annuelles/été/hiver à partir des moyennes mensuelles
-tmp <- rast("C:/Users/200597/Desktop/cru_ts4.04.1901.2019.tmp.dat.nc")
+# Compute mean annual/winter/summer temperature from monthly temperature data
 tmp9019 <-subset(tmp, 1068:1428)
 yrs <- unique(year(time(tmp9019)))[-1]
 
@@ -43,9 +40,8 @@ tmp9019_winter_mean_5years <- tapp(tmp9019_winter_mean, rep(1:6,each=5), fun = m
 names(tmp9019_winter_mean_5years) <- c(1992,1997,2002,2007,2012,2017)
 
 
-## Calcul des STI ##
+## Calculate species' STI ##
 
-# température par occurence
 dir.create("./Data/STI/")
 
 for(i in 1:length(dir.df)){
@@ -57,13 +53,14 @@ for(i in 1:length(dir.df)){
     temperature_rasters = tmp9019_mean_5years
   }
   
-  name.group <- gsub("./Data/datasets/cleaned/thinned/", "", dir.df[[i]])
+  name.group <- gsub("../../../../Data/datasets/cleaned/thinned/", "", dir.df[[i]])
   name.group <- gsub(".csv", "", name.group)
   print(name.group)
   
   df <- fread(dir.df[[i]]) %>% as_tibble()
   anu_period <-split(df, df$year)
   
+  # extract temperature at each occurrence
   temperature <-list()
   for (l in 1:nlyr(temperature_rasters)){
     temperature[[l]] <- extract(subset(temperature_rasters, l), anu_period[[l]][,3:4])[,2]
@@ -77,10 +74,10 @@ for(i in 1:length(dir.df)){
   names(anu_sti)[names(anu_sti) == "temperature[[i]]"] <- "temperature"
   anu_sti <-anu_sti[!is.na(anu_sti$temperature),]
   
-  # Moyenne température par espèce
+  # Mean temperature by species
   STI_anu <- anu_sti %>% 
     dplyr::group_by(species) %>%
     dplyr::summarise(sti = mean(temperature))
   
-  fwrite(STI_anu, paste0("./Data/STI/", name.group, ".csv"))
+  fwrite(STI_anu, paste0("../../../../Data/STI/", name.group, ".csv"))
 }

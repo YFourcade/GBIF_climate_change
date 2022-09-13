@@ -11,25 +11,24 @@ library(sf)
 library(foreach)
 sf::sf_use_s2(FALSE)
 
-setwd("C:/Users/200597/OneDrive - UPEC/Recherche/Students/Projets étudiants 2021/Armelle")
 
 ### load data sets directories ###
-dir.df <- list.files("./Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
-dir.sti <- list.files("./Data/STI/", full.names = T, pattern = ".csv")
-dir.cti <- list.files("./Results/", pattern = "CTI_annual",full.names = T)
+dir.df <- list.files("../../../../Data/datasets/cleaned/thinned", full.names = T, pattern = ".csv")
+dir.sti <- list.files("../../../../Data/STI/", full.names = T, pattern = ".csv")
+dir.cti <- list.files("../../../../Results/", pattern = "CTI_annual",full.names = T)
 
 ### Sliding windows ###
-# création d'un raster de résolution 1*1
+# create raster at resolution 1*1
 r2 <-rast(nrows=180, ncols=360, xmin=-180, xmax=180, ymin=-90, ymax=90,
           crs = "epsg:4326", resolution = 1)
 
-# Conversion du raster en polygone
+# Convert raster to polygon
 pol2 <- as.polygons(r2)
 pol2 <- st_as_sf(pol2)
 pol2$id_polygons <- 1:nrow(pol2)
 pol2$id_polygons <- paste0("ID_", 1:nrow(pol2))
 
-# centroïdes
+# centroïds
 cent2 <- st_centroid(pol2)
 cent2$id_polygons <- pol2$id_polygons
 
@@ -50,14 +49,14 @@ cent_unproj <- na.omit(cent_unproj)
 # projection
 cent_proj <- st_transform(cent2[cent2$id_polygons %in% cent_unproj$id_polygons,], "ESRI:54009")
 
-# création de buffers autour de chaque centroïde
+# create buffers around each centroïd
 Buffer <- st_buffer(cent_proj, dist = 200000) %>% 
   mutate(X = st_coordinates(cent_proj)[,1], Y = st_coordinates(cent_proj)[,2]) 
 Buffer.dt <- Buffer %>% st_drop_geometry %>% as.data.table()
 Buffer.dt$col.id <- 1:nrow(Buffer.dt)
 
 # taxa to do
-sp <- gsub(".csv", "", dir.df); sp <- gsub("./Data/datasets/cleaned/thinned/", "", sp)
+sp <- gsub(".csv", "", dir.df); sp <- gsub("../../../../Data/datasets/cleaned/thinned/", "", sp)
 
 # find remaining taxa
 sp.done <- list.files("./Results/", pattern = "gained_"); sp.done <- gsub(".csv", "", sp.done); sp.done <- gsub("gained_", "", sp.done)
@@ -65,7 +64,7 @@ sp.done.index <- match(sp.done, sp)
 
 foreach(j = setdiff(1:length(sp), sp.done.index)) %do% {
   
-  name.group <- gsub("./Data/datasets/cleaned/thinned/", "", dir.df[[j]])
+  name.group <- gsub("../../../../Data/datasets/cleaned/thinned/", "", dir.df[[j]])
   name.group <- gsub(".csv", "", name.group)
   print(name.group)
   
@@ -173,40 +172,42 @@ foreach(j = setdiff(1:length(sp), sp.done.index)) %do% {
 
 
 ### compute average rSTI ###
-sites <- read_csv("./Results/temp_windows.csv")
+sites <- read_csv("../../../../Results/temp_windows.csv")
 
 coefs.rsti <- foreach(j = 1:length(dir.df), .combine = rbind.data.frame) %do% {
   
-  name.group <- gsub("./Data/datasets/cleaned/thinned/", "", dir.df[[j]])
+  name.group <- gsub("../../../../Data/datasets/cleaned/thinned/", "", dir.df[[j]])
   name.group <- gsub(".csv", "", name.group)
   print(name.group)
   
-  new_spanu  <- read_csv(paste0("./Results/gained_", name.group ,".csv"))
-  ext_spanu  <- read_csv(paste0("./Results/lost_", name.group ,".csv"))
+  new_spanu  <- read_csv(paste0("../../../../Results/gained_", name.group ,".csv"))
+  ext_spanu  <- read_csv(paste0("../../../../Results/lost_", name.group ,".csv"))
   
   new_spanu <- new_spanu %>% mutate(year = as.numeric(substr(interval, 1,4))) %>% 
-    left_join(read_csv(paste0(list.files("./Results/", pattern = "Descr_per_buffer",full.names = T)[[j]]))) %>% 
+    left_join(read_csv(paste0(list.files("../../../../Results/", pattern = "Descr_per_buffer",full.names = T)[[j]]))) %>% 
     left_join(sites %>% group_by(id_polygons) %>% 
                 summarise_at(.vars = c("X","Y"), .funs = unique)) %>% 
     mutate_at(.vars = c("interval", "species", "id_polygons"), .funs = as.factor) %>% na.omit
   
   Mgain <- new_spanu %>% summarise(estimate = t.test(rSTI)$estimate,
-                          lwr.ci = t.test(rSTI)$conf.int[1],
-                          upr.ci = t.test(rSTI)$conf.int[2],
-                          n.pos = length(rSTI[rSTI > 0]) / n(),
-                          n.neg = length(rSTI[rSTI < 0]) / n())
+                                   lwr.ci = t.test(rSTI)$conf.int[1],
+                                   upr.ci = t.test(rSTI)$conf.int[2],
+                                   p.t.test = t.test(rSTI)$p.value,
+                                   n.pos = length(rSTI[rSTI > 0]) / n(),
+                                   n.neg = length(rSTI[rSTI < 0]) / n())
   
   ext_spanu <- ext_spanu %>% mutate(year = as.numeric(substr(interval, 1,4))) %>% 
-    left_join(read_csv(paste0(list.files("./Results/", pattern = "Descr_per_buffer",full.names = T)[[j]]))) %>% 
+    left_join(read_csv(paste0(list.files("../../../../Results/", pattern = "Descr_per_buffer",full.names = T)[[j]]))) %>% 
     left_join(sites %>% group_by(id_polygons) %>% 
                 summarise_at(.vars = c("X","Y"), .funs = unique)) %>% 
     mutate_at(.vars = c("interval", "species", "id_polygons"), .funs = as.factor) %>% na.omit
   
   Mlost <- ext_spanu %>% summarise(estimate = t.test(rSTI)$estimate,
-                          lwr.ci = t.test(rSTI)$conf.int[1],
-                          upr.ci = t.test(rSTI)$conf.int[2],
-                          n.pos = length(rSTI[rSTI > 0]) / n(),
-                          n.neg = length(rSTI[rSTI < 0]) / n())
+                                   lwr.ci = t.test(rSTI)$conf.int[1],
+                                   upr.ci = t.test(rSTI)$conf.int[2],
+                                   p.t.test = t.test(rSTI)$p.value,
+                                   n.pos = length(rSTI[rSTI > 0]) / n(),
+                                   n.neg = length(rSTI[rSTI < 0]) / n())
   
   # Mgain <-bam(rSTI ~ 1 + 
   #               s(id_polygons, bs = "re") + 
@@ -237,14 +238,16 @@ coefs.rsti <- foreach(j = 1:length(dir.df), .combine = rbind.data.frame) %do% {
     Gain = Mgain, 
     Loss = Mlost,
     .id = "Type"))
-
+  
   # write_csv(rr, paste0("./Results/rsti_coefs_", name.group ,".csv"))
   return(rr)
 }
-write_csv(coefs.rsti, paste0("./Results/rsti_coefs" ,".csv"))
+write_csv(coefs.rsti, paste0("../../../../Results/rsti_coefs" ,".csv"))
 
-# plot
-coefs.rsti <- read_csv("./Results/rsti_coefs.csv")
+coefs.rsti %>% mutate(significant = ifelse(p.t.test < 0.05, 'yes', 'no'))
+
+### plots ###
+coefs.rsti <- read_csv("../../../../Results/rsti_coefs.csv")
 
 coefs.rsti <- coefs.rsti %>% 
   mutate(
@@ -260,16 +263,20 @@ coefs.rsti <- coefs.rsti %>%
 taxa.col.order <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))(10)
 names(taxa.col.order) <- unique(coefs.rsti$Taxon)
 
-taxa.order <- cbind.data.frame(Taxon = c("Aves (winter)",
-                                             "Aves (summer)",
-                                             "Chiroptera",
-                                             "Caudata",
-                                             "Anura",
-                                             "Lumbricidae",
-                                             "Apidae",
-                                             "Lepidoptera",
-                                             "Formicidae",
-                                             "Rodentia"))
+taxa.order <- cbind.data.frame(
+  Taxon = c(
+    "Aves (winter)",
+    "Caudata",
+    "Lumbricidae",
+    "Chiroptera",
+    "Rodentia",
+    "Anura",
+    "Apidae",
+    "Aves (summer)",
+    "Lepidoptera",
+    "Formicidae"
+  )
+)
 coefs.rsti <- coefs.rsti %>% 
   mutate(Taxon = factor(Taxon, levels = c(as.character(rev(taxa.order$Taxon)))))
 
@@ -295,7 +302,7 @@ ggsave(filename = "Fig4a.pdf", height = 4, width = 5)
 
 coefs.rsti %>% 
   mutate(Type = ifelse(Type == "Gain", "Gained species", "Lost species")) %>% 
-  pivot_longer(cols = c(6,7)) %>% 
+  pivot_longer(cols = c(7,8)) %>% 
   ggplot(aes(y = Taxon, x = value, fill = name)) +
   geom_bar(stat = 'identity') +
   geom_vline(xintercept = 0.5) +
@@ -305,11 +312,55 @@ coefs.rsti %>%
   facet_grid(~Type) +
   theme_minimal() +
   theme(
-        axis.text.y = element_text(colour = taxa.col.order[rev(taxa.order$Taxon)]),
-        panel.grid = element_line(colour = NA)
+    axis.text.y = element_text(colour = taxa.col.order[rev(taxa.order$Taxon)]),
+    panel.grid = element_line(colour = NA)
   )
 
 ggsave(filename = "Fig4b.pdf", height = 4, width = 5.5)
 
 
 coefs.rsti %>% pivot_wider(names_from = "Type", values_from = c(estimate,lwr.ci,upr.ci,n.pos,n.neg))
+
+### effect of human influence index ###
+library(doFuture)
+
+hii_windows <- read_csv("../../../../Results/hii_windows.csv")
+eco.windows <- read_csv("../../../../Results/ecoregions.csv")
+temp_windows <- read_csv("../../../../Results/temp_windows.csv")
+
+registerDoFuture()
+plan(multisession, workers = 10)
+latitude.rsti <- foreach(j = 1:length(dir.df), .combine = rbind.data.frame) %dopar% {
+  
+  name.group <- gsub("../../../../Data/datasets/cleaned/thinned/", "", dir.df[[j]])
+  name.group <- gsub(".csv", "", name.group)
+  print(name.group)
+  
+  if(i %in% c(3,8)){
+    Season.df = "Summer"
+  } else if(i == 4) {
+    Season.df = "Winter"
+  } else {
+    Season.df = "Annual"
+  }
+  
+  ext_spanu  <- read_csv(paste0("../../../../Results/lost_", name.group ,".csv"))
+  
+  ext_spanu <- ext_spanu %>% mutate(year = as.numeric(substr(interval, 1,4))) %>% 
+    left_join(sites %>% filter(Season == Season.df)) %>% 
+    left_join(hii_windows)  %>% 
+    left_join(eco.windows) %>% na.omit
+  
+  m.ext <- lmer(rSTI ~ hii + 
+                  mean + continent + 
+                  (1|ECO_NAME) + (1|interval) + (1|species) + (1|id_polygons),
+                 data = ext_spanu)
+  
+  rr <- bind_cols(Taxon = name.group, summary(m.ext)$coefficients %>% as.data.frame %>% rownames_to_column("Variables"))
+  
+  return(rr)
+}
+
+latitude.rsti %>% filter(Variables == "hii")
+
+write_csv(latitude.rsti, "../../../../Results/latitude.rsti.csv")
