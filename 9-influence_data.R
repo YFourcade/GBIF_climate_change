@@ -189,8 +189,7 @@ res.rep.slopes <- res.rep %>% filter(id_polygons != "Full") %>%
 
 
 m.data <- lmer(
-  log(abs.diff) ~ as.factor(n.yr.min) + as.factor(n.occ.min) + 
-    Taxon +
+  log(abs.diff) ~ as.factor(n.yr.min) * as.factor(n.occ.min) * Taxon +
     (1|id_polygons),
   data = res.rep.slopes)
 # library(DHARMa)
@@ -198,85 +197,24 @@ m.data <- lmer(
 anov.text.chisq <- car::Anova(m.data)
 anov.text.F <- sjstats::anova_stats(m.data)
 
-taxa.order <- emmeans(m.data, ~ Taxon, type = "response") %>% as.data.frame() %>% 
-  arrange(response) %>% pull(Taxon)
-
-taxa.col.order <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))(10)
-names(taxa.col.order) <- unique(res.rep.slopes$Taxon)
-
-emm_options(lmerTest.limit = 202397)
-
-p2 <- emmeans(m.data, ~ Taxon, type = "response") %>% as.data.frame() %>% 
-  mutate(
-    Taxon = gsub("birds_summer", "Aves (summer)", Taxon),
-    Taxon = gsub("birds_winter", "Aves (winter)", Taxon),
-    Taxon = gsub("Fourmis", "Formicidae", Taxon),
-    Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
-    Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
-    Taxon = gsub("Rongeurs", "Rodentia", Taxon),
-    Taxon = as.factor(Taxon)
-  ) %>% 
-  mutate(Taxon = factor(Taxon, levels = c(as.character(rev(taxa.order))))) %>% 
-  ggplot(aes(x = Taxon, y = response, color = Taxon)) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0) +
-  scale_x_discrete("") +
-  scale_y_continuous("Abs. difference in CTI trend\nbetween filtered and full dataset") +
-  scale_color_manual(values = taxa.col.order[rev(taxa.order)]) + 
-  theme_classic() + 
-  theme(legend.position = "none",
-        axis.text.x = element_text(colour = taxa.col.order[rev(taxa.order)], angle = 45, vjust = .5),
-  ) +
-  geom_text(  size    = 3,
-              data    = cbind.data.frame(anov.text.chisq[3,], partial.etasq = anov.text.F[3,"partial.etasq"]),
-              mapping = aes(x = -Inf, y = -Inf, 
-                            label = paste0("Chi-squared = ", round(Chisq,3),"\n",
-                                          "P = ", round(`Pr(>Chisq)`,3),"\n",
-                                          "Eta-squared = ", round(partial.etasq,3))),
-              hjust   = -.1,
-              vjust   = -.5,
-              color = 'black'
-  )
+pred <- cbind.data.frame(
+  distinct(res.rep.slopes[,1:3]),
+  pred = predict(m.data, newdata = distinct(res.rep.slopes[,1:3]), re.form = NA)
+) %>% mutate(pred = exp(pred))
 
 
-p3 <- emmeans(m.data, ~ n.yr.min, type = "response") %>% as.data.frame() %>% 
-  ggplot(aes(x = n.yr.min, y = response)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0) +
-  scale_x_discrete("Minimum no. of years\nby sliding window") +
-  scale_y_continuous("Abs. difference in CTI trend\nbetween filtered and full dataset",
-                     limits = c(0.008,0.025)) +
+p2 <- pred %>% ggplot(aes(x = n.occ.min, y = n.yr.min, fill = pred)) +
+  geom_raster() +
+  facet_wrap(~Taxon, ncol = 3) +
   theme_classic() +
-  geom_text(  size    = 3,
-              data    = cbind.data.frame(anov.text.chisq[1,], partial.etasq = anov.text.F[1,"partial.etasq"]),
-              mapping = aes(x = -Inf, y = -Inf, 
-                            label = paste0("Chi-squared = ", round(Chisq,3),"\n",
-                                          "P = ", round(`Pr(>Chisq)`,3),"\n",
-                                          "Eta-squared = ", round(partial.etasq,3))),
-              hjust   = -.1,
-              vjust   = -.5,
-              color = 'black'
+  scale_x_discrete("Minimum no. of occurrences by sliding window") +
+  scale_y_discrete("Minimum no. of years by sliding window") +
+  scale_fill_viridis_c(option = "magma") +
+  theme(
+    strip.background = element_blank(),
+    legend.position = c(.7,.1),legend.direction = 'horizontal', legend.key.height = unit(.03, "npc")
   )
 
-p4 <- emmeans(m.data, ~ n.occ.min, type = "response") %>% as.data.frame() %>% 
-  ggplot(aes(x = n.occ.min, y = response)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0) +
-  scale_x_discrete("Minimum no. of occurrences\nby sliding window") +
-  scale_y_continuous("Abs. difference in CTI trend\nbetween filtered and full dataset",
-                     limits = c(0.008,0.025)) +
-  theme_classic() +
-  geom_text(  size    = 3,
-              data    = cbind.data.frame(anov.text.chisq[2,], partial.etasq = anov.text.F[2,"partial.etasq"]),
-              mapping = aes(x = -Inf, y = -Inf, 
-                            label = paste0("Chi-squared = ", round(Chisq,3),"\n",
-                                          "P =", round(`Pr(>Chisq)`,3),"\n",
-                                          "Eta-squared = ", round(partial.etasq,3))),
-              hjust   = -.1,
-              vjust   = -.5,
-              color = 'black'
-  )
+p3 <- plot_grid(p1, p2, align = "hv", axis = 'tb', labels = c("(a)", "(b)"))
 
-p5 <- plot_grid(p1, plot_grid(p2, plot_grid(p3, p4), nrow = 2, rel_heights = c(1,.75)), rel_widths = c(.9,1))
-
-ggsave(p5, filename = "../../../../Fig5.pdf")
+ggsave(p3, filename = "../../../../Fig5.pdf")
