@@ -15,20 +15,33 @@ hii_windows <- read_csv("../../../../Results/hii_windows.csv")
 # quantile(hii_windows$hii, na.rm = T, probs = c(.1,.5,.9))
 eco.windows <- read_csv("../../../../Results/ecoregions.csv")
 
-hii_windows %>% left_join(temp_windows) %>% 
-  filter(Season == "Annual") %>% 
-  ggplot(aes(x = X, y = Y, color = trend)) +
-  geom_point()
+# look at distribution of no. occurrences
+df.t <- lapply(1:10, 
+               function(x){
+                 name.group <- gsub("Descr_per_buffer_", "", list.files(dir.df, pattern = "Descr_per_buffer")[[x]])
+                 name.group <- gsub(".csv", "", name.group)
+                 dd <- read_csv(list.files(dir.df, pattern = "Descr_per_buffer", full.names = T)[[x]])
+                 dd <- cbind.data.frame(Taxon = name.group, dd)
+                 return(dd)
+               }
+)
+df.t <- bind_rows(df.t) %>% 
+  mutate(
+    Taxon = gsub("birds_summer", "Aves (summer)", Taxon),
+    Taxon = gsub("birds_winter", "Aves (winter)", Taxon),
+    Taxon = gsub("Fourmis", "Formicidae", Taxon),
+    Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
+    Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
+    Taxon = gsub("Rongeurs", "Rodentia", Taxon),
+    Taxon = as.factor(Taxon)
+  )
 
-hii_windows %>% left_join(temp_windows) %>% 
-  filter(Season == "Annual") %>% 
-  ggplot(aes(x = Y, y = trend, color = trend)) +
-  geom_point()
-
-hii_windows %>% left_join(temp_windows) %>% 
-  filter(Season == "Annual") %>% 
-  ggplot(aes(x = Y, y = hii, color = trend)) +
-  geom_point()
+df.t %>% ggplot(aes(x = log(n.occ))) +
+  geom_histogram(col = 'white') +
+  facet_wrap(~Taxon, scales = "free") +
+  scale_x_continuous("No. occurrences") +
+  scale_y_continuous("Frequency") +
+  theme_classic()
 
 # statistical analyses
 registerDoFuture()
@@ -57,7 +70,7 @@ res <- foreach(i = 1:10) %dorng% {
   m1 <- lmer(
     cti ~ year + mean + continent + 
       (year|id_polygons) + (1|ECO_NAME),
-    weights = n.occ,
+    weights = log(n.occ),
     data = CTI_yr
   )
   
@@ -97,11 +110,11 @@ res <- foreach(i = 1:10) %dorng% {
   
   m2 <- lmer(
     trend ~ trend.temp * (mean.temp + hii) + continent + (1|ECO_NAME),
-    weights = n.occ,
+    weights = log(n.occ),
     data = CTI_trend
   )
   
-  cti_VS_temp_hii <- emtrends(
+  cti_VS_temp_hii <- emtrends( # extract trend by 3 values of HII
     m2, ~ trend.temp*hii, 
     var = "trend.temp", 
     at = list(hii = c(quantile(CTI_trend$hii, probs = .25), 
@@ -124,30 +137,6 @@ res <- foreach(i = 1:10) %dorng% {
     R2m = MuMIn::r.squaredGLMM(m2)[1],
     R2c = MuMIn::r.squaredGLMM(m2)[2],
   )
-  
-  # # analysis CTM ~ hii
-  # CTA <- CTI_trend %>% mutate(CTA = abs(trend - trend.temp)) %>% left_join(hii_windows)
-  # 
-  # m3 <- lmer(
-  #   log(CTA) ~ hii + mean.temp + continent + (1|ECO_NAME),
-  #     weights = n.occ,
-  #   data = CTA
-  # )
-  # 
-  # resid.sampl <- sample_n(residuals(m3) %>% as.data.frame() %>% rownames_to_column(), 1000)
-  # sp.corel <- ncf::spline.correlog(x = CTI_yr[resid.sampl$rowname,"X"]$X,
-  #                                  y = CTI_yr[resid.sampl$rowname,"Y"]$Y,
-  #                                  z = resid.sampl[,2],
-  #                                  resamp = 100, latlon = T, xmax = 1000)
-  # plot(sp.corel ,main = paste("Taxon :", name.group, "- Model : m2"))
-  # 
-  #   coefs.m3 <- summary(m3)$coefficients[1:4,] %>% as.data.frame() %>% rownames_to_column("Variable")
-  #   coefs.m3 <- coefs.m3 %>% mutate(
-  #     lwr.ci = Estimate - (1.96*`Std. Error`),
-  #     upr.ci = Estimate + (1.96*`Std. Error`),
-  #     R2m = MuMIn::r.squaredGLMM(m3)[1],
-  #     R2c = MuMIn::r.squaredGLMM(m3)[2]
-  #   )
   
   return(
     list(
@@ -228,7 +217,7 @@ res <- res %>%
          hii = factor(hii, levels = c("low", "median", "high")))
 
 res %>% 
-  ggplot(aes(x = Estimate, xmin = lwr.ci, xmax = upr.ci, y = Taxon, color = Taxon, shape = hii)) +
+  ggplot(aes(x = Estimate, xmin = lwr.ci, xmax = upr.ci, y = Taxon, color = Taxon, group = hii)) +
   geom_vline(xintercept = 0, col = 'red3', linetype = 2) +
   geom_point(position = position_dodge(.4)) +
   geom_errorbar(width = 0, position = position_dodge(.4)) +
@@ -238,14 +227,15 @@ res %>%
   theme_minimal() +
   theme(
     panel.grid.minor = element_line(colour = NA),
+    legend.position = 'none',
     axis.text.y = element_text(colour = c("brown",taxa.col.order[rev(taxa.order),"col"]))
   )
 
-ggsave(file = "../../../../Fig3.pdf", width = 8, height = 4)
+ggsave(file = "../../../../Fig3.pdf", width = 8.5, height = 4)
 
 ### look at numbers ###
 res.models <- read_csv("../../../../Results/results_cti_models.csv") 
-  
+
 res %>% 
   filter(Taxon == "MEAN")
 
@@ -253,6 +243,12 @@ res %>% filter(hii == 'median') %>%
   arrange(desc(Estimate)) %>% 
   mutate_at(3:6, .funs = function(x){round(x,4)}) %>% 
   group_by(Analysis) %>% group_split()
+
+res %>% filter(Analysis == 'CTI_trend_Temp_trend', hii == 'median') %>% 
+  arrange(desc(Estimate)) %>% 
+  mutate_at(3:6, .funs = function(x){round(x,4)})
+
+
 
 ### test CTI trend in same countries as Lehikoinen et al  2021 ###
 library(sf)
@@ -275,7 +271,7 @@ CTI_yr.winter.sel <- st_intersection(CTI_yr.winter.sf, world)
 m.w <- lmer(
   cti ~ year + mean + continent + 
     (year|id_polygons) + (1|ECO_NAME),
-  weights = n.occ,
+  weights = log(n.occ),
   data = CTI_yr.winter.sel
 )
 summary(m.w)
@@ -295,7 +291,7 @@ CTI_yr.summer.sel <- st_intersection(CTI_yr.summer.sf, world)
 m.s <- lmer(
   cti ~ year + mean + continent + 
     (year|id_polygons) + (1|ECO_NAME),
-  weights = n.occ,
+  weights = log(n.occ),
   data = CTI_yr.summer.sel
 )
 summary(m.s)
@@ -315,40 +311,41 @@ trends.hii <- read_csv("../../../../Results/results_cti_ranef.csv") %>%
          Taxon = gsub("Rongeurs", "Rodentia", Taxon)
   )
 
-ggplot() +
-  geom_raster(data = trends.hii %>% left_join(temp_windows %>% filter(Season == "Annual") %>% select(2,6,7)) %>% 
-                rename(`CTI trend` = trend),
-              aes(x = X, y = Y, fill = `CTI trend`)) +
-  geom_sf(data = world,
-          color = "black", size = .01, fill = "white") +
-  facet_wrap(. ~ Taxon, ncol = 3) +
-  scale_fill_viridis(option = "inferno") +
-  coord_sf(xlim = c(-170, 55), ylim = c(5, NA)) +
-  theme_void() +
-  theme(
-    panel.border = element_rect(colour = "black", fill = NA),
-    panel.spacing = unit(0, "points"),
-    plot.margin = unit(c(.5, .5, .5, .5), "lines"),
-    strip.text.y = element_text(hjust = 0, margin = margin(1, 1, 1, 1, "lines")),
-    strip.text.x = element_text(margin = margin(.5, .5, .5, .5, "lines")),
-    legend.position = c(.7,.1),legend.direction = 'horizontal', legend.key.height = unit(.03, "npc")
-  )
+library(terra)
+mask <- rast(temp_windows %>% select(6,7) %>% filter(X < 55) %>% mutate(y = 1), type = 'xyz')
+rast_cti_trend <- vector('list', 10) 
+for(i in 1:10){
+  rast_cti_trend[[i]] <- rast(trends.hii %>% left_join(temp_windows %>% filter(Season == "Annual") %>% select(2,6,7)) %>% 
+         rename(`CTI trend` = trend) %>% filter(Taxon == unique(Taxon)[[i]]) %>% select(5,6,3),
+       type = 'xyz')
+  names(rast_cti_trend[[i]]) <- unique(trends.hii$Taxon)[[i]]
+  rast_cti_trend[[i]] <- resample(rast_cti_trend[[i]], mask)
+}
+rast_cti_trend <- rast(rast_cti_trend)
 
-ggsave(file = "../../../../FigS2.pdf", width = 6, height = 5)
+pdf("../../../../FigureS2.pdf")
+plot(rast_cti_trend, nc = 3)
+dev.off()
 
 
-# trends.hii %>% left_join(temp_windows %>% filter(Season == "Annual") %>% select(2,4)) %>% 
-#   rename(`CTI trend` = trend) %>% 
-#   ggplot(aes(x = mean, y = `CTI trend`)) +
-#   geom_point(size = .5) +
-#   geom_smooth() +
-#   facet_wrap(.~Taxon, ncol = 5) +
-#   scale_x_continuous("Mean temperature (°C)") +
-#   scale_y_continuous("CTI trend") +
-#   theme_classic() +
+# ggplot() +
+#   geom_raster(data = trends.hii %>% left_join(temp_windows %>% filter(Season == "Annual") %>% select(2,6,7)) %>% 
+#                 rename(`CTI trend` = trend),
+#               aes(x = X, y = Y, fill = `CTI trend`)) +
+#   geom_sf(data = world,
+#           color = "black", size = .01, fill = "white") +
+#   facet_wrap(. ~ Taxon, ncol = 3) +
+#   scale_fill_viridis(option = "inferno") +
+#   coord_sf(xlim = c(-170, 55), ylim = c(5, NA)) +
+#   theme_void() +
 #   theme(
 #     panel.border = element_rect(colour = "black", fill = NA),
+#     panel.spacing = unit(0, "points"),
+#     plot.margin = unit(c(.5, .5, .5, .5), "lines"),
+#     strip.text.y = element_text(hjust = 0, margin = margin(1, 1, 1, 1, "lines")),
+#     strip.text.x = element_text(margin = margin(.5, .5, .5, .5, "lines")),
+#     legend.position = c(.7,.1),legend.direction = 'horizontal', legend.key.height = unit(.03, "npc")
 #   )
 # 
-# ggsave(file = "../../../../FigS2b.pdf", width = 6, height = 4)
+# ggsave(file = "../../../../FigS2.pdf", width = 6, height = 5)
 

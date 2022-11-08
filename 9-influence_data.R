@@ -44,7 +44,7 @@ res <- foreach(i = 1:10, .combine = rbind.data.frame) %dorng% {
   m1.full <- lmer(
     cti ~ year + mean + continent + 
       (year|id_polygons) + (1|ECO_NAME), 
-    weights = n.occ,
+    weights = log(n.occ),
     data = CTI_yr
   )
   
@@ -65,14 +65,14 @@ res <- foreach(i = 1:10, .combine = rbind.data.frame) %dorng% {
       m1 <- lmer(
         cti ~ year + mean + continent + 
           (year|id_polygons) + (1|ECO_NAME), 
-        weights = n.occ,
+        weights = log(n.occ),
         data = CTI_yr.tmp
       )
     } else {
       m1 <- lmer(
         cti ~ year + mean + 
           (year|id_polygons) + (1|ECO_NAME), 
-        weights = n.occ,
+        weights = log(n.occ),
         data = CTI_yr.tmp
       )
     }
@@ -120,17 +120,31 @@ write_csv(res, "../../../../Results/results_cti_models_testData_re.csv")
 ## plot - analyses ##
 res.rep <- read_csv("../../../../Results/results_cti_models_testData_re.csv")
 
-res.rep %>% left_join(hii_windows) %>% 
-  left_join(temp_windows %>% filter(Season == "Winter")) %>% 
-  filter(Taxon == "birds_winter") %>% 
-  ggplot(aes(y = cti.trend.full, x = Y)) +
-  geom_point() +
-  theme_classic()
-
 # overall estimates
 range.CTI_Year.values <- res.rep %>% filter(id_polygons == "Full") %>% 
   select(cti.trend.full, cti.trend) %>% 
   pivot_longer(cols = 1:2) %>% pull(value) %>% range
+
+res.rep %>% filter(id_polygons == "Full") %>% mutate(diff = cti.trend - cti.trend.full) %>% 
+  pull(diff) %>% hist
+
+res.rep %>% filter(id_polygons != "Full") %>% mutate(diff = cti.trend - cti.trend.full) %>% mutate(
+  Taxon = gsub("birds_summer", "Aves (summer)", Taxon),
+  Taxon = gsub("birds_winter", "Aves (winter)", Taxon),
+  Taxon = gsub("Fourmis", "Formicidae", Taxon),
+  Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
+  Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
+  Taxon = gsub("Rongeurs", "Rodentia", Taxon),
+  Taxon = gsub("Caudata", "Urodela", Taxon)
+) %>% 
+  ggplot(aes(x = diff)) +
+  geom_histogram(color = 'white', fill = "lightgrey") +
+  facet_wrap(.~Taxon, scales = 'free', ncol = 3) + 
+  geom_vline(xintercept = 0, color = "red4") +
+  scale_x_continuous("Difference in CTI trend between filtered and full dataset") +
+  scale_y_continuous("Frequency") +
+  theme_minimal()
+
 
 p1 <- res.rep %>% filter(id_polygons == "Full") %>% 
   ggplot(aes(x = cti.trend.full, y = cti.trend)) +
@@ -175,8 +189,6 @@ p1 <- p1 + geom_text(
 # random slopes
 res.rep.slopes <- res.rep %>% filter(id_polygons != "Full") %>% 
   mutate(abs.diff = abs(cti.trend - cti.trend.full),
-         n.occ.min = as.factor(n.occ.min),
-         n.yr.min = as.factor(n.yr.min)
   ) %>%   mutate(
     Taxon = gsub("birds_summer", "Aves (summer)", Taxon),
     Taxon = gsub("birds_winter", "Aves (winter)", Taxon),
@@ -184,31 +196,39 @@ res.rep.slopes <- res.rep %>% filter(id_polygons != "Full") %>%
     Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
     Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
     Taxon = gsub("Rongeurs", "Rodentia", Taxon),
+    Taxon = gsub("Caudata", "Urodela", Taxon),
     Taxon = as.factor(Taxon)
   )
 
 
 m.data <- lmer(
-  log(abs.diff) ~ as.factor(n.yr.min) * as.factor(n.occ.min) * Taxon +
+  log(abs.diff) ~ n.yr.min * n.occ.min * Taxon +
     (1|id_polygons),
   data = res.rep.slopes)
 # library(DHARMa)
 # plot(simulateResiduals(m.data), quantreg=T)
-anov.text.chisq <- car::Anova(m.data)
+anov.text.chisq <- car::Anova(m.data, type = 3)
 anov.text.F <- sjstats::anova_stats(m.data)
 
+test(emtrends(m.data, spec = ~n.yr.min * Taxon, var = "n.yr.min"))
+test(emtrends(m.data, spec = ~n.occ.min * Taxon, var = "n.occ.min"))
+
+newdat <- expand.grid(Taxon = unique(res.rep.slopes$Taxon),
+                      n.occ.min = seq(50,150,length.out = 5),
+                      n.yr.min = seq(2,5,length.out = 5))
+
 pred <- cbind.data.frame(
-  distinct(res.rep.slopes[,1:3]),
-  pred = predict(m.data, newdata = distinct(res.rep.slopes[,1:3]), re.form = NA)
-) %>% mutate(pred = exp(pred))
+  newdat,
+  pred = predict(m.data, newdata = newdat, re.form = NA)
+) %>%  mutate(pred = exp(pred))
 
 
 p2 <- pred %>% ggplot(aes(x = n.occ.min, y = n.yr.min, fill = pred)) +
   geom_raster() +
   facet_wrap(~Taxon, ncol = 3) +
   theme_classic() +
-  scale_x_discrete("Minimum no. of occurrences by sliding window") +
-  scale_y_discrete("Minimum no. of years by sliding window") +
+  scale_x_continuous("Minimum no. of occurrences by sliding window") +
+  scale_y_continuous("Minimum no. of years by sliding window") +
   scale_fill_viridis_c(option = "magma") +
   theme(
     strip.background = element_blank(),

@@ -28,12 +28,13 @@ df.yr <- lapply(
   }
 ) %>% 
   rbindlist %>% 
-  mutate(Taxon = gsub("Aves_summer", "Aves (summer)", Taxon),
-         Taxon = gsub("Aves_winter", "Aves (winter)", Taxon),
+  mutate(Taxon = gsub("birds_summer", "Aves (summer)", Taxon),
+         Taxon = gsub("birds_winter", "Aves (winter)", Taxon),
          Taxon = gsub("Fourmis", "Formicidae", Taxon),
          Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
          Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
-         Taxon = gsub("Rongeurs", "Rodentia", Taxon)
+         Taxon = gsub("Rongeurs", "Rodentia", Taxon),
+         Taxon = gsub("Caudata", "Urodela", Taxon)
   )
 df.yr$Taxon <- as.factor(df.yr$Taxon)
 
@@ -44,12 +45,13 @@ df.buff <- lapply(
   }
 ) %>% 
   rbindlist %>% 
-  mutate(Taxon = gsub("Aves_summer", "Aves (summer)", Taxon),
-         Taxon = gsub("Aves_winter", "Aves (winter)", Taxon),
+  mutate(Taxon = gsub("birds_summer", "Aves (summer)", Taxon),
+         Taxon = gsub("birds_winter", "Aves (winter)", Taxon),
          Taxon = gsub("Fourmis", "Formicidae", Taxon),
          Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
          Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
          Taxon = gsub("Rongeurs", "Rodentia", Taxon),
+         Taxon = gsub("Caudata", "Urodela", Taxon)
   )
 df.buff$Taxon <- as.factor(df.buff$Taxon)
 
@@ -129,6 +131,7 @@ ggplot() +
     strip.text.x = element_text(margin = margin(.5, .5, .5, .5, "lines")),
     legend.position = "bottom"
   )
+ggsave("../../../../FigS1a.pdf", width = 10, height = 6)
 
 ggplot() +
   geom_raster(data = df.buff %>% left_join(temp_windows %>% filter(Season == "Annual")) %>% 
@@ -149,6 +152,7 @@ ggplot() +
     strip.text.x = element_text(margin = margin(.5, .5, .5, .5, "lines")),
     legend.position = "bottom"
   )
+ggsave("../../../../FigS1b.pdf", width = 10, height = 6)
 
 
 # data sources
@@ -191,8 +195,9 @@ data_source <- data_source %>%
     Taxon = gsub("lepidoptera", "Lepidoptera", Taxon),
     Taxon = gsub("Lombrics", "Lumbricidae", Taxon),
     Taxon = gsub("Rongeurs", "Rodentia", Taxon),
+    Taxon = gsub("Caudata", "Urodela", Taxon),
     Taxon = as.factor(Taxon)
-  ) 
+  )
 
 data_source <- data_source %>% group_by(Taxon) %>% 
   mutate(rang = rank(-N),
@@ -210,7 +215,8 @@ p3 <- data_source %>% filter(rang < 11) %>%
   geom_line(alpha = .7) +
   scale_x_continuous("Data provider rank",
                      expand = c(0, 0),
-                     limits = c(.5, 11)) + 
+                     limits = c(.5, 11),
+                     breaks = c(2,4,6,8,10)) + 
   scale_y_continuous("Proportion") +
   scale_color_manual(values = colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))(10)) + 
   scale_size_manual(values = c(1.5,3)) +
@@ -230,7 +236,7 @@ p3 <- data_source %>% filter(rang < 11) %>%
   theme(legend.position = "none")
 
 cowplot::plot_grid(p1,p2,p3, nrow = 3, labels = c("(a)","(b)","(c)"))
-ggsave("Fig2.pdf", width = 4.5, height = 10)
+ggsave("../../../../Fig2.pdf", width = 4.5, height = 10)
 
 
 
